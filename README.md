@@ -1,7 +1,7 @@
 # Connected Equipment Parts Integration Hub
 **Created by Alexa Gonzales Tuesta** | [LinkedIn](https://www.linkedin.com/in/alexa-gonzales-tuesta/)
 
-**Live console:** _add your Streamlit link here after deploying_
+**Live console:** (https://equipment-parts-integration-app-hrkhgumc6pa6hzh4jxulvq.streamlit.app/)
 
 An integration hub that connects four enterprise systems found at any heavy equipment manufacturer and its dealer
 network (telematics, ERP order management, dealer inventory, and an e-commerce storefront), so a machine fault or a
