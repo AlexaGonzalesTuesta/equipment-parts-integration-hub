@@ -1,7 +1,4 @@
 # Connected Equipment Parts Integration Hub
-
-![CI](https://github.com/AlexaGonzalesTuesta/equipment-parts-integration-hub/actions/workflows/ci.yml/badge.svg)
-
 **Created by Alexa Gonzales Tuesta** | [LinkedIn](https://www.linkedin.com/in/alexa-gonzales-tuesta/)
 
 **Live console:** _add your Streamlit link here after deploying_
