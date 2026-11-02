@@ -1,7 +1,12 @@
 # Connected Equipment Parts Integration Hub
+
+![CI](https://github.com/AlexaGonzalesTuesta/equipment-parts-integration-hub/actions/workflows/ci.yml/badge.svg)
+
 **Created by Alexa Gonzales Tuesta** | [LinkedIn](https://www.linkedin.com/in/alexa-gonzales-tuesta/)
 
 **Live console:** (https://equipment-parts-integration-app-hrkhgumc6pa6hzh4jxulvq.streamlit.app/)
+
+![Operations console](docs/images/console-overview.png)
 
 An integration hub that connects four enterprise systems found at any heavy equipment manufacturer and its dealer
 network (telematics, ERP order management, dealer inventory, and an e-commerce storefront), so a machine fault or a
@@ -33,7 +38,7 @@ no single place to see why an order is stuck.
 |---|---|
 | ERP orders created automatically | 2,964 |
 | Actionable fault events ordered with no person involved | 94% |
-| Processing time per message (95th percentile) | 1.7 ms (target under 50 ms) |
+| Processing time per message (95th percentile) | under 2 ms (target under 50 ms) |
 | Duplicate resends blocked | 70, with 0 duplicate orders |
 | Messages caught by two dealer system outages | 19, all recovered by replay with no manual work |
 | AI: precision of auto-orders on held-out notes | 87% (top-3 accuracy 96%) |
