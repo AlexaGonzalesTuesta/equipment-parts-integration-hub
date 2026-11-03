@@ -1,0 +1,93 @@
+{
+  "messages_received": 3800,
+  "orders_created": 2964,
+  "orders_by_channel": {
+    "TELEMATICS": 2221,
+    "ECOMMERCE": 743
+  },
+  "order_value_total": 7886268.0,
+  "fulfillment_mix": {
+    "ASSIGNED_DEALER": 2180,
+    "REGIONAL_TRANSFER": 393,
+    "BACKORDER": 391
+  },
+  "outcomes": {
+    "ORDER_CREATED": 2964,
+    "NO_ACTION": 593,
+    "MANUAL_REVIEW": 96,
+    "REJECTED": 79,
+    "DEAD_LETTER": 68
+  },
+  "duplicates_blocked": 70,
+  "dead_letters_total": 166,
+  "dead_letters_resolved_by_replay": 19,
+  "dead_letters_open": {
+    "VALIDATION_FAILED": 54,
+    "MASTER_DATA_MISSING": 42,
+    "PRICE_MISMATCH": 26,
+    "UNKNOWN_PART": 25
+  },
+  "dms_retries": 522,
+  "latency": {
+    "p50_ms": 0.19,
+    "p95_ms": 1.16,
+    "p99_ms": 1.83,
+    "max_ms": 9.09,
+    "messages": 3931
+  },
+  "telematics_touchless_rate": 0.937,
+  "telematics_touchless_orders": 2221,
+  "est_hours_earlier_parts_reserved": 66630,
+  "ai_offline_eval": {
+    "n_test": 800,
+    "top1_accuracy": 0.756,
+    "top3_accuracy": 0.963,
+    "auto_order_coverage": 0.711,
+    "auto_order_precision": 0.87,
+    "threshold": 0.65
+  },
+  "ai_live_eval": {
+    "ai_diagnoses": 367,
+    "auto_ordered": 271,
+    "sent_to_review": 96,
+    "accuracy_all": 0.771,
+    "accuracy_auto_ordered": 0.856
+  },
+  "ai_threshold_curve": [
+    {
+      "threshold": 0.4,
+      "auto_order_coverage": 0.907,
+      "auto_order_precision": 0.793
+    },
+    {
+      "threshold": 0.5,
+      "auto_order_coverage": 0.84,
+      "auto_order_precision": 0.818
+    },
+    {
+      "threshold": 0.6,
+      "auto_order_coverage": 0.754,
+      "auto_order_precision": 0.856
+    },
+    {
+      "threshold": 0.65,
+      "auto_order_coverage": 0.711,
+      "auto_order_precision": 0.87
+    },
+    {
+      "threshold": 0.7,
+      "auto_order_coverage": 0.666,
+      "auto_order_precision": 0.887
+    },
+    {
+      "threshold": 0.8,
+      "auto_order_coverage": 0.564,
+      "auto_order_precision": 0.907
+    },
+    {
+      "threshold": 0.9,
+      "auto_order_coverage": 0.386,
+      "auto_order_precision": 0.932
+    }
+  ]
+}

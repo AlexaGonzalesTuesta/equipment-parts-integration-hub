@@ -5,11 +5,13 @@ Run:  streamlit run app/console.py
 Every visitor works in a private copy of the database (a sandbox), so scenarios and
 the reset button only change that visitor's data.
 """
+import gzip
 import html
 import inspect
 import json
 import os
 import re
+import shutil
 import sqlite3
 import sys
 import tempfile
@@ -30,7 +32,7 @@ from hub import metrics as M  # noqa: E402
 from hub.connectors import DMSConnector, ERPConnector  # noqa: E402
 from hub.db import connect  # noqa: E402
 from hub.pipeline import run  # noqa: E402
-from hub.recommender import train_from_db  # noqa: E402
+from hub.recommender import PartsRecommender  # noqa: E402
 from hub.service import IntegrationHub  # noqa: E402
 
 GITHUB_URL = "https://github.com/AlexaGonzalesTuesta/equipment-parts-integration-hub"
@@ -192,14 +194,31 @@ SCENARIOS = [
 
 
 # ----------------------------------------------------------------------------- data and sandbox
-@st.cache_resource(show_spinner="Building the simulated ERP, dealer inventory and telematics feeds (about 10 seconds)...")
+SNAPSHOT_DIR = ROOT / "app" / "snapshot"
+
+
+@st.cache_resource(show_spinner="Loading the simulated ERP, dealer inventory and telematics data...")
 def base_landscape(db_path: str):
-    if not Path(db_path).exists():
-        run(Path(db_path), quiet=True)
+    """Make sure the base database exists, then train the AI model on its service notes.
+
+    On the free host the app sleeps and restarts often. Rebuilding the 90-day simulation on
+    the first visit keeps the CPU busy long enough that the page's own files time out, so the
+    app restores the bundled snapshot instead and only runs the pipeline if there is none."""
+    path = Path(db_path)
+    if not path.exists():
+        snap = SNAPSHOT_DIR / "hub.db.gz"
+        if snap.exists():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with gzip.open(snap, "rb") as src, open(path, "wb") as dst:
+                shutil.copyfileobj(src, dst)
+            shutil.copy(SNAPSHOT_DIR / "run_summary.json", path.parent / "run_summary.json")
+        else:
+            run(path, quiet=True)
     conn = connect(db_path)
-    model = train_from_db(conn)
+    rows = conn.execute("SELECT note_text, fault_code FROM ml_history_notes").fetchall()
     conn.close()
-    return model
+    # Accuracy figures come from the pipeline run, so the app skips the extra evaluation fits.
+    return PartsRecommender().fit([r["note_text"] for r in rows], [r["fault_code"] for r in rows], evaluate=False)
 
 
 def _clean_old_sandboxes():
