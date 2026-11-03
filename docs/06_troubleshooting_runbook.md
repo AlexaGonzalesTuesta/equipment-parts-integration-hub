@@ -3,7 +3,7 @@
 For IT support. Start every investigation with the message id (event id or web order id).
 
 ## Step 1. Find the message
-- Console: **Trace a message** tab, paste the id.
+- Console: **Exceptions queue** tab, **Trace a message**, paste the id.
 - API: `GET /v1/messages/{message_id}` returns the final status and every step with timestamps.
 - 404 means the hub never received it: the problem is upstream (sending system or network).
 
@@ -47,7 +47,8 @@ For IT support. Start every investigation with the message id (event id or web o
 
 ## Step 4. Health checks
 - `GET /health` should return `ok`.
-- Console **Integration health** tab: a spike in DMS retries for one dealer is an early warning before dead letters appear.
+- Console **Exceptions queue** tab: open items by owning team, with one-click replay for messages held during a dealer system outage.
+- Console **90-day results** tab: a rise in dealer system timeouts is an early warning before dead letters appear.
 - p95 processing time above 50 ms breaches NFR-01; check database size and connector response times.
 
 ## Escalation

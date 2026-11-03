@@ -135,6 +135,22 @@ def test_dead_letter_after_retries_then_replay(conn, landscape, machine):
 
 
 @pytest.mark.req("FR-10")
+def test_replay_one_recovers_only_that_message(conn, landscape, machine):
+    """IT support can replay one held message without touching the rest of the queue."""
+    down = IntegrationHub(conn, landscape["ai"], dms=FailFirstN(conn, 2 * C.MAX_RETRIES))
+    down.process_telematics(make_event(machine["machine_id"], event_id="TE-T00001"))
+    down.process_telematics(make_event(machine["machine_id"], event_id="TE-T00002", fault="ENG-230"))
+    assert conn.execute("SELECT COUNT(*) FROM hub_dead_letter WHERE resolved_at IS NULL").fetchone()[0] == 2
+
+    up = IntegrationHub(conn, landscape["ai"], dms=DMSConnector(conn, failure_rate=0.0, outages=[]))
+    res = up.replay_one("TE-T00001")
+    assert res.outcome == "ORDER_CREATED"
+    open_ids = [r[0] for r in conn.execute("SELECT message_id FROM hub_dead_letter WHERE resolved_at IS NULL")]
+    assert open_ids == ["TE-T00002"]
+    assert up.replay_one("TE-T00001") is None
+
+
+@pytest.mark.req("FR-10")
 def test_unknown_machine_is_replayable_dead_letter(hub, conn):
     res = hub.process_telematics(make_event("M99999"))
     assert res.outcome == "DEAD_LETTER" and "MASTER_DATA_MISSING" in res.detail

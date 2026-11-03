@@ -75,6 +75,20 @@ class IntegrationHub:
             results.append(res)
         return results
 
+    def replay_one(self, message_id, as_of=None):
+        """Reprocess a single open, replayable dead letter (IT support fixes one message at a time)."""
+        row = self.conn.execute("SELECT * FROM hub_dead_letter WHERE message_id = ? AND replayable = 1 "
+                                "AND resolved_at IS NULL", (message_id,)).fetchone()
+        if row is None:
+            return None
+        payload = json.loads(row["payload"])
+        fn = self.process_telematics if row["channel"] == TELEMATICS else self.process_web_order
+        res = fn(payload, as_of=as_of or datetime.now(), replay=True)
+        if res.outcome != "DEAD_LETTER":
+            self.conn.execute("UPDATE hub_dead_letter SET resolved_at = ? WHERE id = ?", (now_iso(), row["id"]))
+            self.conn.commit()
+        return res
+
     # ------------------------------------------------------------------ core wrapper
     def _process(self, channel, payload, message_id, flow, as_of, replay):
         t0 = time.perf_counter()

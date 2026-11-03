@@ -1,6 +1,6 @@
 # 05 Requirements Traceability Matrix
 
-Generated automatically by `tools/build_rtm.py` from the test run at 2026-11-02T21:24:12.
+Generated automatically by `tools/build_rtm.py` from the test run at 2026-11-03T21:25:30.
 
 **22 of 22 requirements verified** by passing tests.
 
@@ -15,7 +15,7 @@ Generated automatically by `tools/build_rtm.py` from the test run at 2026-11-02T
 | FR-07 | Must | Source each order line from the machine's assigned dealer first, then from another dealer in the same region, otherwise backorder it. | integration | test_backorder_when_region_is_out<br>test_regional_transfer_when_assigned_dealer_is_out<br>test_sources_from_assigned_dealer_first | 3 | VERIFIED |
 | FR-08 | Must | Create exactly one ERP sales order per accepted message with header, lines, status and fulfillment type. | integration, system | test_known_fault_creates_order_with_catalog_kit<br>test_orders_match_outcomes_one_to_one<br>test_web_order_creates_order_and_blocks_double_submit | 3 | VERIFIED |
 | FR-09 | Must | Retry transient Dealer Management System failures up to 3 times with exponential backoff. | integration, system | test_dead_letter_after_retries_then_replay<br>test_outage_messages_recovered_by_replay<br>test_retry_recovers_from_transient_failures | 3 | VERIFIED |
-| FR-10 | Must | Send messages that cannot be processed to a dead letter queue with a reason code and allow replay of replayable messages once the cause is fixed. | integration, system | test_dead_letter_after_retries_then_replay<br>test_outage_messages_recovered_by_replay<br>test_unknown_machine_is_replayable_dead_letter | 3 | VERIFIED |
+| FR-10 | Must | Send messages that cannot be processed to a dead letter queue with a reason code and allow replay of replayable messages once the cause is fixed. | integration, system | test_dead_letter_after_retries_then_replay<br>test_outage_messages_recovered_by_replay<br>test_replay_one_recovers_only_that_message<br>test_unknown_machine_is_replayable_dead_letter | 4 | VERIFIED |
 | FR-11 | Must | Never create more than one order for the same message id (idempotency for resends and double clicks). | integration, system | test_duplicate_message_creates_one_order<br>test_orders_match_outcomes_one_to_one<br>test_web_order_creates_order_and_blocks_double_submit | 3 | VERIFIED |
 | FR-12 | Must | Reject storefront orders for parts not in the ERP catalog and hold orders whose price differs from the ERP price list by more than 1 percent. | integration | test_price_mismatch_is_held<br>test_price_within_tolerance_is_accepted<br>test_unknown_part_is_rejected | 3 | VERIFIED |
 | FR-13 | Should | Do not create a second order for the same machine and fault while an order from the last 7 days is still open. | integration | test_open_order_for_same_fault_is_not_duplicated | 1 | VERIFIED |
