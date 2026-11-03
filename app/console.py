@@ -43,6 +43,11 @@ OK, INFO, BAD, GREY = "#2f6f4e", "#35577a", "#a63a2b", "#7a7870"
 st.set_page_config(page_title="Parts Order Integration Hub", layout="wide", initial_sidebar_state="collapsed")
 
 
+def raw(body):
+    """Render raw HTML or CSS. st.html never runs it through the Markdown parser."""
+    return st.html(body)
+
+
 def _stretch():
     """Full-width keyword for this Streamlit version (newer versions use width=, older use_container_width=)."""
     major, minor = (int(x) for x in st.__version__.split(".")[:2])
@@ -52,7 +57,7 @@ def _stretch():
 STRETCH = _stretch()
 
 # ----------------------------------------------------------------------------- style
-st.markdown(
+raw(
     """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
@@ -131,9 +136,7 @@ ol.steps .d { color:#5f5e58; font-size:12.5px; }
 .owner b { font-size:16px; margin-right:4px; }
 .small { font-size:12.5px; color:#5f5e58; }
 </style>
-""",
-    unsafe_allow_html=True,
-)
+""")
 
 # ----------------------------------------------------------------------------- reference text
 OUTCOME_CHIP = {"ORDER_CREATED": ("Order created", "ok"), "DUPLICATE": ("Duplicate blocked", "grey"),
@@ -483,16 +486,14 @@ def render_order(conn, order_id):
 
 
 def banner(kind, kicker, text):
-    st.markdown(f'<div class="banner {kind}"><div class="kicker">{esc(kicker)}</div>{text}</div>',
-                unsafe_allow_html=True)
+    raw(f'<div class="banner {kind}"><div class="kicker">{esc(kicker)}</div>{text}</div>')
 
 
 def render_result(conn, model):
     last = st.session_state.get("last")
     if not last:
-        st.markdown('<div class="empty">No event sent yet.<br>Pick a scenario on the left. The ERP order, the dealer '
-                    'that ships each part, and every step the hub took will appear here.</div>',
-                    unsafe_allow_html=True)
+        raw('<div class="empty">No event sent yet.<br>Pick a scenario on the left. The ERP order, the dealer '
+                    'that ships each part, and every step the hub took will appear here.</div>')
         return
     mid = last["message_id"]
     res = conn.execute("SELECT * FROM hub_results WHERE message_id = ? ORDER BY rowid DESC LIMIT 1", (mid,)).fetchone()
@@ -515,13 +516,13 @@ def render_result(conn, model):
         if last.get("forced_part"):
             st.caption(f"In your sandbox, the assigned dealer's stock of {last['forced_part']} was set to zero to "
                        "create this situation.")
-        st.markdown(render_order(conn, res["order_id"]), unsafe_allow_html=True)
+        raw(render_order(conn, res["order_id"]))
     elif outcome == "DUPLICATE":
         banner("info", "Resend blocked",
                f"Order {esc(last.get('first_order'))} already covers this event, so the customer is not billed twice. "
                f"The database also refuses a second order for the same message. {secs}")
         if last.get("first_order"):
-            st.markdown(render_order(conn, last["first_order"]), unsafe_allow_html=True)
+            raw(render_order(conn, last["first_order"]))
     elif outcome == "MANUAL_REVIEW":
         r = conn.execute("SELECT * FROM hub_manual_review WHERE message_id = ?", (mid,)).fetchone()
         top3 = json.loads(r["top3"]) if r else []
@@ -531,16 +532,14 @@ def render_result(conn, model):
         banner("warn", "Sent to a service advisor",
                f"The AI was only {r['confidence']:.0%} sure, below the {C.AI_CONFIDENCE_THRESHOLD:.0%} bar, so no "
                f"parts were ordered. A wrong guess would ship the wrong parts to a job site. {secs}")
-        st.markdown(f'<div class="doc"><div class="small">Operator note</div><div style="margin:2px 0 10px 0">'
+        raw(f'<div class="doc"><div class="small">Operator note</div><div style="margin:2px 0 10px 0">'
                     f'"{esc(r["symptom_note"])}"</div><table class="lines"><thead><tr><th>AI guess</th><th>Fault</th>'
-                    f'<th style="text-align:right">Confidence</th></tr></thead><tbody>{guesses}</tbody></table></div>',
-                    unsafe_allow_html=True)
+                    f'<th style="text-align:right">Confidence</th></tr></thead><tbody>{guesses}</tbody></table></div>')
     elif outcome in ("DEAD_LETTER", "REJECTED"):
         code = detail.split(":")[0]
         what, owner, step = REASONS.get(code, (detail, "IT support", "Investigate"))
         banner("bad", f"Held for {owner}", f"{esc(what)}. Nothing was half-ordered. Next step: {esc(step)}. {secs}")
-        st.markdown(f'<div class="small">System detail: <span class="mono">{esc(detail)}</span></div>',
-                    unsafe_allow_html=True)
+        raw(f'<div class="small">System detail: <span class="mono">{esc(detail)}</span></div>')
         open_dl = conn.execute("SELECT 1 FROM hub_dead_letter WHERE message_id = ? AND replayable = 1 "
                                "AND resolved_at IS NULL", (mid,)).fetchone()
         if code == "DMS_UNAVAILABLE" and open_dl:
@@ -551,8 +550,8 @@ def render_result(conn, model):
         banner("info", OUTCOME_CHIP.get(outcome, (outcome, ""))[0], f"{esc(detail)} {secs}")
 
     with st.expander("Every step the hub took", expanded=outcome != "ORDER_CREATED"):
-        st.markdown(f'<div class="small" style="margin-bottom:6px">Message <span class="mono">{esc(mid)}</span>, '
-                    f'{esc(last["channel"].title())}</div>' + render_steps(conn, mid), unsafe_allow_html=True)
+        raw(f'<div class="small" style="margin-bottom:6px">Message <span class="mono">{esc(mid)}</span>, '
+                    f'{esc(last["channel"].title())}</div>' + render_steps(conn, mid))
 
 
 def style_fig(fig, height=300):
@@ -575,7 +574,7 @@ except Exception as exc:  # noqa: BLE001
     st.stop()
 s, base_orders, base_dl, base_retries = baseline(str(BASE_DB))
 
-st.markdown(
+raw(
     f"""
 <div class="topbar">
   <div>
@@ -588,9 +587,7 @@ st.markdown(
 </div>
 <p class="lead">Pick a scenario to watch a <b>machine fault become a reserved ERP parts order in under a second</b>,
 with no phone call or re-keying, and see what happens when something goes wrong.</p>
-""",
-    unsafe_allow_html=True,
-)
+""")
 
 mix = s.get("fulfillment_mix", {})
 filled = (mix.get("ASSIGNED_DEALER", 0) + mix.get("REGIONAL_TRANSFER", 0)) / max(sum(mix.values()), 1)
@@ -606,9 +603,8 @@ k[2].metric(f"Duplicate orders from {s['duplicates_blocked']} resends", f"{dup_o
             help="Resent messages were recognized and blocked.")
 k[3].metric("Outage orders auto-recovered", f"{dms_fixed} of {dms_total}",
             help="Orders held during two dealer system outages, replayed with no manual work.")
-st.markdown(f'<div class="kpi-note">Simulated 90-day run: {s["messages_received"]:,} inbound messages, 12 dealers, '
-            f'1,500 machines, {s["orders_created"]:,} ERP orders worth ${s["order_value_total"] / 1e6:.1f}M.</div>',
-            unsafe_allow_html=True)
+raw(f'<div class="kpi-note">Simulated 90-day run: {s["messages_received"]:,} inbound messages, 12 dealers, '
+            f'1,500 machines, {s["orders_created"]:,} ERP orders worth ${s["order_value_total"] / 1e6:.1f}M.</div>')
 
 tabs = st.tabs(["Try it", "Exceptions queue", "90-day results", "Requirements and tests"])
 
@@ -616,7 +612,7 @@ tabs = st.tabs(["Try it", "Exceptions queue", "90-day results", "Requirements an
 with tabs[0]:
     left, right = st.columns([1, 1.9], gap="large")
     with left:
-        st.markdown('<div class="panel-title">Scenarios</div>', unsafe_allow_html=True)
+        raw('<div class="panel-title">Scenarios</div>')
         for key, label, desc in SCENARIOS:
             if st.button(label, key=f"scn_{key}", **STRETCH):
                 try:
@@ -625,7 +621,7 @@ with tabs[0]:
                 except Exception as exc:  # noqa: BLE001
                     st.session_state.last = None
                     st.error(f"That scenario could not run: {exc}")
-            st.markdown(f'<div class="scn-desc">{esc(desc)}</div>', unsafe_allow_html=True)
+            raw(f'<div class="scn-desc">{esc(desc)}</div>')
 
         with st.expander("Send your own fault event"):
             mrows = conn.execute("SELECT machine_id, model, machine_type FROM erp_machines ORDER BY machine_id "
@@ -651,22 +647,22 @@ with tabs[0]:
                 except Exception as exc:  # noqa: BLE001
                     st.error(f"The event could not be processed: {exc}")
 
-        st.markdown('<div class="panel-title" style="margin-top:18px">Your sandbox</div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="small">You have sent {st.session_state.sent} event(s). Changes stay in your own '
-                    'copy of the data.</div>', unsafe_allow_html=True)
+        raw('<div class="panel-title" style="margin-top:18px">Your sandbox</div>')
+        raw(f'<div class="small">You have sent {st.session_state.sent} event(s). Changes stay in your own '
+                    'copy of the data.</div>')
         if st.button("Reset my sandbox", key="reset"):
             reset_sandbox()
             st.rerun()
 
     with right:
-        st.markdown('<div class="panel-title">Result</div>', unsafe_allow_html=True)
+        raw('<div class="panel-title">Result</div>')
         render_result(conn, model)
 
 # ----------------------------------------------------------------------------- exceptions
 with tabs[1]:
-    st.markdown('<p class="lead" style="font-size:15px">Everything the hub could not finish on its own, with the team '
+    raw('<p class="lead" style="font-size:15px">Everything the hub could not finish on its own, with the team '
                 'that owns it. Nothing is silently dropped. This queue includes anything you created in your '
-                'sandbox.</p>', unsafe_allow_html=True)
+                'sandbox.</p>')
     dl = pd.read_sql("SELECT * FROM hub_dead_letter WHERE resolved_at IS NULL ORDER BY id DESC", conn)
     review = pd.read_sql("SELECT * FROM hub_manual_review WHERE status = 'OPEN' ORDER BY id DESC", conn)
     for frame in (dl, review):
@@ -676,37 +672,36 @@ with tabs[1]:
     dl["next_step"] = dl.reason_code.map(lambda c: REASONS.get(c, ("", "", "Investigate"))[2])
     counts = dl.owner.value_counts().to_dict()
     counts["Service advisors"] = len(review)
-    st.markdown('<div class="owner-strip">' + "".join(
+    raw('<div class="owner-strip">' + "".join(
         f'<div class="owner"><b>{n}</b>{esc(o)}</div>' for o, n in sorted(counts.items(), key=lambda x: -x[1])) +
-        "</div>", unsafe_allow_html=True)
+        "</div>")
 
     held = dl[dl.reason_code == "DMS_UNAVAILABLE"]
-    st.markdown('<div class="panel-title">Waiting on a dealer system</div>', unsafe_allow_html=True)
+    raw('<div class="panel-title">Waiting on a dealer system</div>')
     if held.empty:
-        st.markdown('<div class="small">Nothing is waiting on a dealer system. Run "Dealer system is down" on the '
-                    'Try it tab to see one held and replayed.</div>', unsafe_allow_html=True)
+        raw('<div class="small">Nothing is waiting on a dealer system. Run "Dealer system is down" on the '
+                    'Try it tab to see one held and replayed.</div>')
     for _, r in held.head(5).iterrows():
         c1, c2 = st.columns([3, 1])
-        c1.markdown(f'<span class="mono">{esc(r.message_id)}</span> &middot; {esc(r.detail)}', unsafe_allow_html=True)
+        c1.html(f'<span class="mono">{esc(r.message_id)}</span> &middot; {esc(r.detail)}')
         if c2.button("Replay", key=f"replay_{r.message_id}"):
             reliable_hub(conn, model).replay_one(r.message_id)
             st.rerun()
 
-    st.markdown('<div class="panel-title" style="margin-top:16px">Held for a person</div>', unsafe_allow_html=True)
+    raw('<div class="panel-title" style="margin-top:16px">Held for a person</div>')
     owners = ["All teams"] + sorted(dl.owner.unique())
     pick = st.selectbox("Team", owners, label_visibility="collapsed")
     view = dl if pick == "All teams" else dl[dl.owner == pick]
     if view.empty:
-        st.markdown('<div class="empty">No open exceptions for this team.</div>', unsafe_allow_html=True)
+        raw('<div class="empty">No open exceptions for this team.</div>')
     else:
         st.dataframe(view[["created_at", "message_id", "channel", "problem", "owner", "next_step", "detail"]]
                      .rename(columns={"created_at": "received", "next_step": "next step"}),
                      hide_index=True, **STRETCH)
 
-    st.markdown('<div class="panel-title" style="margin-top:16px">Service advisor queue (AI not confident)</div>',
-                unsafe_allow_html=True)
+    raw('<div class="panel-title" style="margin-top:16px">Service advisor queue (AI not confident)</div>')
     if review.empty:
-        st.markdown('<div class="empty">No notes waiting for an advisor.</div>', unsafe_allow_html=True)
+        raw('<div class="empty">No notes waiting for an advisor.</div>')
     else:
         descs = dict(conn.execute("SELECT fault_code, description FROM erp_fault_catalog").fetchall())
         review["ai_best_guess"] = review.predicted_fault.map(lambda c: f"{c}  {descs.get(c, '')}")
@@ -716,22 +711,21 @@ with tabs[1]:
                      hide_index=True, column_config={"confidence": st.column_config.NumberColumn(format="%.2f")},
                      **STRETCH)
 
-    st.markdown('<div class="panel-title" style="margin-top:16px">Trace a message</div>', unsafe_allow_html=True)
+    raw('<div class="panel-title" style="margin-top:16px">Trace a message</div>')
     default_id = (st.session_state.get("last") or {}).get("message_id", "")
     mid = st.text_input("Message id", value=default_id, placeholder="Event id or web order id",
                         label_visibility="collapsed")
     if mid:
         inbound = conn.execute("SELECT * FROM hub_inbound WHERE message_id = ?", (mid.strip(),)).fetchone()
         if inbound is None:
-            st.markdown('<div class="small">The hub never received this id. The problem is upstream, in the sending '
-                        'system or the network.</div>', unsafe_allow_html=True)
+            raw('<div class="small">The hub never received this id. The problem is upstream, in the sending '
+                        'system or the network.</div>')
         else:
-            st.markdown(f'<div class="small" style="margin-bottom:6px">Final status: '
+            raw(f'<div class="small" style="margin-bottom:6px">Final status: '
                         f'{chip(*OUTCOME_CHIP.get(inbound["status"], (inbound["status"], "grey")))}</div>'
-                        + render_steps(conn, mid.strip()), unsafe_allow_html=True)
+                        + render_steps(conn, mid.strip()))
     else:
-        st.markdown('<div class="small">Enter an event id or web order id to see every step the hub took.</div>',
-                    unsafe_allow_html=True)
+        raw('<div class="small">Enter an event id or web order id to see every step the hub took.</div>')
 
 # ----------------------------------------------------------------------------- 90-day results
 with tabs[2]:
@@ -754,16 +748,16 @@ with tabs[2]:
 
     c1, c2 = st.columns([1, 1], gap="large")
     with c1:
-        st.markdown('<div class="panel-title">ERP orders created per week</div>', unsafe_allow_html=True)
+        raw('<div class="panel-title">ERP orders created per week</div>')
         fig = px.line(wk, x="week", y="orders", color="source", markers=True,
                       color_discrete_map={"Machine fault (telematics)": INK, "Storefront order": ACCENT})
         fig.update_traces(line_width=2, marker_size=6)
         st.plotly_chart(style_fig(fig), **STRETCH)
     with c2:
-        st.markdown('<div class="panel-title">Where to add stock</div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="small" style="margin-bottom:8px">{esc(worst.dealer_name)} backorders '
+        raw('<div class="panel-title">Where to add stock</div>')
+        raw(f'<div class="small" style="margin-bottom:8px">{esc(worst.dealer_name)} backorders '
                     f'{worst.backorder:.0%} of its orders, the highest of 12 dealers. Its parts mix is the first place '
-                    'to raise stocking levels.</div>', unsafe_allow_html=True)
+                    'to raise stocking levels.</div>')
         st.dataframe(by_dealer.drop(columns=["region", "value"]).rename(columns={"dealer_name": "dealer", "own_stock": "own stock",
                                                "backorder": "backordered"}),
                      hide_index=True, height=300,
@@ -774,25 +768,24 @@ with tabs[2]:
 
     c3, c4 = st.columns([1.25, 1], gap="large")
     with c3:
-        st.markdown('<div class="panel-title">Exceptions in 90 days, by owner</div>', unsafe_allow_html=True)
+        raw('<div class="panel-title">Exceptions in 90 days, by owner</div>')
         ex = base_dl.assign(problem=base_dl.reason_code.map(lambda c: REASONS.get(c, (c, "", ""))[0]),
                             owner=base_dl.reason_code.map(lambda c: REASONS.get(c, ("", "IT support", ""))[1]),
                             resolved=base_dl.resolved_at.notna())
         ex = ex.groupby(["problem", "owner"]).agg(messages=("message_id", "count"),
                                                   recovered=("resolved", "sum")).reset_index()
         st.dataframe(ex.sort_values("messages", ascending=False), hide_index=True, **STRETCH)
-        st.markdown(f'<div class="small">{len(base_retries):,} dealer system timeouts were retried automatically '
-                    'before any of these were held.</div>', unsafe_allow_html=True)
+        raw(f'<div class="small">{len(base_retries):,} dealer system timeouts were retried automatically '
+                    'before any of these were held.</div>')
     with c4:
         curve = pd.DataFrame(s.get("ai_threshold_curve", []))
         if curve.empty:
-            st.markdown('<div class="empty">AI evaluation not available. Run python run_pipeline.py.</div>',
-                        unsafe_allow_html=True)
+            raw('<div class="empty">AI evaluation not available. Run python run_pipeline.py.</div>')
         else:
             long = curve.melt("threshold", var_name="measure", value_name="share")
             long["measure"] = long["measure"].map({"auto_order_coverage": "Notes ordered automatically",
                                                    "auto_order_precision": "Automatic orders that were right"})
-            st.markdown('<div class="panel-title">Setting the AI confidence bar</div>', unsafe_allow_html=True)
+            raw('<div class="panel-title">Setting the AI confidence bar</div>')
             fig = px.line(long, x="threshold", y="share", color="measure", markers=True,
                           color_discrete_sequence=[INK, ACCENT])
             fig.update_traces(line_width=2, marker_size=6)
@@ -802,9 +795,9 @@ with tabs[2]:
             st.plotly_chart(style_fig(fig, 280), **STRETCH)
             off = s.get("ai_offline_eval", {})
             if off:
-                st.markdown(f'<div class="small">At 65%, {off["auto_order_precision"]:.0%} of automatic orders are '
+                raw(f'<div class="small">At 65%, {off["auto_order_precision"]:.0%} of automatic orders are '
                             f'right and {off["auto_order_coverage"]:.0%} of notes need no advisor. A higher bar means '
-                            'fewer wrong parts but more manual work.</div>', unsafe_allow_html=True)
+                            'fewer wrong parts but more manual work.</div>')
 
 # ----------------------------------------------------------------------------- requirements
 with tabs[3]:
@@ -813,16 +806,16 @@ with tabs[3]:
         rtm = pd.read_csv(rtm_path)
         covered = int((rtm["tests_passed"] > 0).sum())
         lat = s.get("latency", {})
-        st.markdown(f'<p class="lead" style="font-size:15px"><b>{covered} of {len(rtm)}</b> business and technical '
+        raw(f'<p class="lead" style="font-size:15px"><b>{covered} of {len(rtm)}</b> business and technical '
                     'requirements are verified by automated tests that run on every change. Processing time is '
                     f'{lat.get("p95_ms", 0):.1f} ms at the 95th percentile against a {C.P95_LATENCY_TARGET_MS} ms '
-                    'target (NFR-01).</p>', unsafe_allow_html=True)
+                    'target (NFR-01).</p>')
         st.dataframe(rtm[["req_id", "priority", "requirement", "test_levels", "tests_passed", "status"]]
                      .rename(columns={"req_id": "id", "test_levels": "test levels", "tests_passed": "tests passed"}),
                      hide_index=True, **STRETCH)
     else:
-        st.markdown('<div class="empty">Run pytest, then python tools/build_rtm.py, to build the traceability '
-                    'matrix.</div>', unsafe_allow_html=True)
-    st.markdown(f'<div class="small">Business requirements, solution design, process flows, test plan and the '
+        raw('<div class="empty">Run pytest, then python tools/build_rtm.py, to build the traceability '
+                    'matrix.</div>')
+    raw(f'<div class="small">Business requirements, solution design, process flows, test plan and the '
                 f'troubleshooting runbook are in the <a href="{GITHUB_URL}/tree/main/docs" target="_blank">docs '
-                'folder</a>.</div>', unsafe_allow_html=True)
+                'folder</a>.</div>')

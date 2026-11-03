@@ -8,7 +8,7 @@
 
 Pick one of seven scenarios and watch a machine fault become a reserved ERP parts order, or see how the hub handles a stock-out, a vague operator note, a resend, a dealer system outage and a stale storefront price. Each visitor gets a private sandbox; fictional data only.
 
-![Operations console](docs/images/console-overview.png)
+![Operations console](docs/images/console-v2.png)
 
 An integration hub that connects four enterprise systems found at any heavy equipment manufacturer and its dealer
 network (telematics, ERP order management, dealer inventory, and an e-commerce storefront), so a machine fault or a
