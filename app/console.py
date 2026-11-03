@@ -6,6 +6,7 @@ Every visitor works in a private copy of the database (a sandbox), so scenarios 
 the reset button only change that visitor's data.
 """
 import html
+import inspect
 import json
 import os
 import re
@@ -55,6 +56,9 @@ def _stretch():
 
 
 STRETCH = _stretch()
+# st.plotly_chart gained a width= parameter later than buttons and tables did
+CHART = ({"width": "stretch"} if "width" in inspect.signature(st.plotly_chart).parameters
+         else {"use_container_width": True})
 
 # ----------------------------------------------------------------------------- style
 raw(
@@ -752,7 +756,7 @@ with tabs[2]:
         fig = px.line(wk, x="week", y="orders", color="source", markers=True,
                       color_discrete_map={"Machine fault (telematics)": INK, "Storefront order": ACCENT})
         fig.update_traces(line_width=2, marker_size=6)
-        st.plotly_chart(style_fig(fig), **STRETCH)
+        st.plotly_chart(style_fig(fig), **CHART)
     with c2:
         raw('<div class="panel-title">Where to add stock</div>')
         raw(f'<div class="small" style="margin-bottom:8px">{esc(worst.dealer_name)} backorders '
@@ -792,7 +796,7 @@ with tabs[2]:
             fig.update_yaxes(tickformat=".0%", range=[0, 1.02])
             fig.add_vline(x=C.AI_CONFIDENCE_THRESHOLD, line_dash="dash", line_color=GREY,
                           annotation_text=f"chosen {C.AI_CONFIDENCE_THRESHOLD:.0%}")
-            st.plotly_chart(style_fig(fig, 280), **STRETCH)
+            st.plotly_chart(style_fig(fig, 280), **CHART)
             off = s.get("ai_offline_eval", {})
             if off:
                 raw(f'<div class="small">At 65%, {off["auto_order_precision"]:.0%} of automatic orders are '
