@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Parts Order Integration Hub | Alexa Gonzales-Tuesta</title>
+<meta name="description" content="Integration hub that turns machine faults and storefront orders into reserved ERP parts orders across telematics, ERP, dealer inventory and e-commerce. Fictional data.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root { --ink:#1d1d1b; --muted:#5f5e58; --line:#d4d1c8; --paper:#f5f4f0; --panel:#ffffff; --accent:#b86e00;
+  --ok:#2f6f4e; --info:#35577a; --bad:#a63a2b; --grey:#7a7870; }
+* { box-sizing:border-box; }
+html, body { margin:0; background:var(--paper); color:var(--ink);
+  font-family:'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif; font-size:15px; line-height:1.45; }
+.mono { font-family:'IBM Plex Mono',Consolas,'Courier New',monospace; font-size:13px; white-space:nowrap; }
+a { color:var(--info); }
+.wrap { max-width:1280px; margin:0 auto; padding:24px 24px 48px; }
+.topbar { display:flex; justify-content:space-between; align-items:flex-end; gap:24px;
+  border-bottom:2px solid var(--ink); padding-bottom:10px; margin-bottom:14px; }
+.eyebrow { font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:var(--accent); font-weight:600; }
+h1 { font-size:28px; font-weight:600; margin:2px 0 0; line-height:1.2; }
+.systems { font-family:'IBM Plex Mono',Consolas,monospace; font-size:12.5px; color:var(--muted); margin:4px 0 0; }
+.meta { text-align:right; font-size:12.5px; color:var(--muted); line-height:1.6; }
+.lead { font-size:17px; margin:4px 0 14px; max-width:920px; }
+.lead b { font-weight:600; }
+
+.kpis { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+.kpi { background:var(--panel); border:1px solid var(--line); padding:10px 14px; }
+.kpi .k { font-size:13px; color:var(--muted); }
+.kpi .v { font-size:30px; font-weight:600; font-variant-numeric:tabular-nums; }
+.kpi-note { font-size:12px; color:var(--muted); margin:8px 0 14px; }
+
+[role=tablist] { display:flex; border-bottom:1px solid var(--line); margin-bottom:16px; overflow-x:auto; scrollbar-width:none; }
+[role=tab] { background:none; border:0; border-bottom:3px solid transparent; padding:9px 18px; font:inherit; font-size:15px;
+  font-weight:500; color:var(--muted); cursor:pointer; white-space:nowrap; }
+[role=tab]:hover { color:var(--ink); }
+[role=tab][aria-selected=true] { color:var(--ink); border-bottom-color:var(--accent); }
+button:focus-visible, input:focus-visible, select:focus-visible, [role=tab]:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+
+.try { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.9fr); gap:32px; }
+.panel-title { font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); font-weight:600; margin:4px 0 8px; }
+.scn { width:100%; text-align:left; font:inherit; font-weight:500; background:#fff; color:var(--ink);
+  border:1px solid #bdb9ae; border-radius:2px; padding:9px 12px; cursor:pointer; transition:background .12s, border-color .12s; }
+.scn:hover { border-color:var(--accent); background:#fbf6ee; }
+.scn[aria-pressed=true] { border-color:var(--accent); background:#fbf6ee; box-shadow:inset 3px 0 0 var(--accent); }
+.scn-desc { font-size:12.5px; color:var(--muted); margin:4px 0 12px 2px; line-height:1.35; }
+.btn { font:inherit; font-size:14px; font-weight:500; background:#fff; color:var(--ink); border:1px solid #bdb9ae;
+  border-radius:2px; padding:7px 12px; cursor:pointer; }
+.btn:hover { border-color:var(--accent); background:#fbf6ee; }
+.howto { border:1px solid var(--line); background:#fff; padding:10px 12px; font-size:13px; color:var(--muted); margin-top:14px; }
+.howto code { font-family:'IBM Plex Mono',Consolas,monospace; font-size:12px; color:var(--ink); background:#f3f1ec; padding:1px 4px; }
+
+.banner { border:1px solid var(--line); border-left:5px solid var(--grey); background:#fff; padding:10px 14px; margin-bottom:12px; font-size:15px; }
+.banner.ok { border-left-color:var(--ok); } .banner.info { border-left-color:var(--info); }
+.banner.warn { border-left-color:var(--accent); } .banner.bad { border-left-color:var(--bad); }
+.banner .kicker { font-size:12px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; }
+.banner.ok .kicker { color:var(--ok); } .banner.info .kicker { color:var(--info); }
+.banner.warn .kicker { color:var(--accent); } .banner.bad .kicker { color:var(--bad); }
+.doc { background:#fff; border:1px solid var(--line); padding:12px 14px; margin-bottom:12px; overflow-x:auto; }
+.doc-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px 18px; margin-bottom:10px; }
+.doc-grid .k { font-size:11.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; }
+.doc-grid .v { font-size:14px; }
+table.lines, table.data { width:100%; border-collapse:collapse; font-size:13.5px; }
+table.lines th, table.data th { text-align:left; font-weight:600; color:var(--muted); font-size:12px; border-bottom:1px solid var(--ink); padding:5px 6px; white-space:nowrap; }
+table.lines td, table.data td { border-bottom:1px solid #e6e3db; padding:6px; vertical-align:top; }
+td.num, th.num { text-align:right; font-variant-numeric:tabular-nums; }
+table.lines tr:hover td, table.data tbody tr:hover td { background:#faf8f3; }
+.chip { display:inline-block; font-size:11.5px; font-weight:600; padding:1px 7px; border:1px solid; border-radius:2px; white-space:nowrap; }
+.chip.ok { color:var(--ok); border-color:#9cc3ad; background:#f1f7f3; }
+.chip.info { color:var(--info); border-color:#a8bccf; background:#f1f5f9; }
+.chip.warn { color:#8a5300; border-color:#e0c08a; background:#fbf5ea; }
+.chip.bad { color:var(--bad); border-color:#ddaaa2; background:#fbf1ef; }
+.chip.grey { color:var(--muted); border-color:#cfccc3; background:#f6f5f2; }
+ol.steps { margin:0; padding-left:20px; font-size:13.5px; }
+ol.steps li { margin:0 0 6px; }
+ol.steps .d { color:var(--muted); font-size:12.5px; }
+details.stepsbox { border:1px solid var(--line); background:#fff; padding:8px 12px; }
+details.stepsbox summary { cursor:pointer; font-weight:500; }
+details.stepsbox[open] summary { margin-bottom:8px; }
+.empty { border:1px dashed #bdb9ae; background:#fbfaf7; padding:28px 18px; color:var(--muted); text-align:center; }
+.small { font-size:12.5px; color:var(--muted); }
+.recorded { font-size:12px; color:var(--muted); margin-top:10px; }
+
+.owner-strip { display:flex; flex-wrap:wrap; gap:8px; margin:4px 0 14px; }
+.owner { border:1px solid var(--line); background:#fff; padding:6px 10px; font-size:13px; }
+.owner b { font-size:16px; margin-right:4px; }
+.tablewrap { overflow:auto; max-height:420px; border:1px solid var(--line); background:#fff; }
+select, input[type=text] { font:inherit; font-size:14px; padding:6px 8px; border:1px solid #bdb9ae; border-radius:2px; background:#fff; color:var(--ink); }
+.section { margin-top:18px; }
+.grid2 { display:grid; grid-template-columns:1fr 1fr; gap:24px; }
+.chart { height:300px; background:#fff; border:1px solid var(--line); }
+.chart-error { height:100%; display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:13.5px; }
+.notice { border:1px solid #e0c08a; background:#fbf5ea; color:#7a4a00; padding:8px 12px; font-size:13.5px; margin-bottom:12px; }
+footer { margin-top:28px; padding-top:12px; border-top:1px solid var(--line); font-size:12.5px; color:var(--muted); }
+[hidden] { display:none !important; }
+
+@media (max-width: 900px) {
+  .try, .grid2 { grid-template-columns:minmax(0,1fr); }
+  .howto code { word-break:break-all; }
+  .kpis { grid-template-columns:1fr 1fr; }
+  .topbar { flex-direction:column; align-items:flex-start; }
+  .meta { text-align:left; }
+  .doc-grid { grid-template-columns:1fr 1fr; }
+}
+@media (max-width: 600px) {
+  .wrap { padding:16px 14px 40px; }
+  .kpis { grid-template-columns:1fr; }
+  [role=tab] { padding:9px 10px; font-size:14px; }
+  .doc-grid { grid-template-columns:1fr; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div>
+      <div class="eyebrow">Dealer parts operations</div>
+      <h1>Parts Order Integration Hub</h1>
+      <p class="systems">Telematics &rarr; Hub &rarr; ERP sales order &middot; Dealer inventory &middot; Storefront</p>
+    </div>
+    <div class="meta">Built by Alexa Gonzales-Tuesta &middot;
+      <a href="https://github.com/AlexaGonzalesTuesta/equipment-parts-integration-hub">Source on GitHub</a><br>
+      Machines, dealers, customers and part numbers are fictional</div>
+  </div>
+
+  <p class="lead">Pick a scenario to watch a <b>machine fault become a reserved ERP parts order in under a second</b>,
+    with no phone call or re-keying, and see what happens when something goes wrong.</p>
+
+  <section class="kpis" aria-label="Results from the 90-day run">
+    <div class="kpi"><div class="k">Faults ordered with no phone call</div><div class="v" id="k1"></div></div>
+    <div class="kpi"><div class="k">Orders filled from dealer stock</div><div class="v" id="k2"></div></div>
+    <div class="kpi"><div class="k" id="k3l"></div><div class="v" id="k3"></div></div>
+    <div class="kpi"><div class="k">Outage orders auto-recovered</div><div class="v" id="k4"></div></div>
+  </section>
+  <div class="kpi-note" id="kpi-note"></div>
+
+  <div role="tablist" aria-label="Views">
+    <button role="tab" id="t0" aria-controls="p0" aria-selected="true">Try it</button>
+    <button role="tab" id="t1" aria-controls="p1" aria-selected="false" tabindex="-1">Exceptions queue</button>
+    <button role="tab" id="t2" aria-controls="p2" aria-selected="false" tabindex="-1">90-day results</button>
+    <button role="tab" id="t3" aria-controls="p3" aria-selected="false" tabindex="-1">Requirements and tests</button>
+  </div>
+
+  <section role="tabpanel" id="p0" aria-labelledby="t0">
+    <div class="try">
+      <div>
+        <div class="panel-title">Scenarios</div>
+        <div id="scenarios"></div>
+        <div class="howto"><b style="color:var(--ink)">Send your own events.</b> Run the hub locally and use the live
+          console or the REST API: <code>streamlit run app/console.py</code> or
+          <code>uvicorn hub.api:create_app --factory</code>. Steps are in the
+          <a href="https://github.com/AlexaGonzalesTuesta/equipment-parts-integration-hub#run-it">README</a>.</div>
+      </div>
+      <div>
+        <div class="panel-title">Result</div>
+        <div id="result"><div class="empty">No scenario selected yet.<br>Pick one on the left. The ERP order, the dealer
+          that ships each part, and every step the hub took will appear here.</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section role="tabpanel" id="p1" aria-labelledby="t1" hidden>
+    <p class="lead" style="font-size:15px">Everything the hub could not finish on its own, with the team that owns it.
+      Nothing is silently dropped.</p>
+    <div class="owner-strip" id="owners"></div>
+    <div class="panel-title">Held for a person</div>
+    <div style="margin-bottom:8px"><select id="team" aria-label="Filter by team"></select></div>
+    <div class="tablewrap"><table class="data" id="tb-held"></table></div>
+    <div id="held-empty" class="empty" hidden>No open exceptions for this team.</div>
+
+    <div class="panel-title section">Service advisor queue (AI not confident)</div>
+    <div class="tablewrap"><table class="data" id="tb-adv"></table></div>
+
+    <div class="panel-title section">Trace a message</div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px">
+      <input type="text" id="trace-id" placeholder="Event id or web order id" aria-label="Message id" style="min-width:260px">
+      <button class="btn" id="trace-go">Trace</button>
+    </div>
+    <div id="trace-out" class="small">Enter an id from the tables above, or click any id, to see every step the hub took.</div>
+  </section>
+
+  <section role="tabpanel" id="p2" aria-labelledby="t2" hidden>
+    <div id="plotly-notice" class="notice" hidden>Charts could not load, so they are hidden. The tables still work.</div>
+    <div class="grid2">
+      <div><div class="panel-title">ERP orders created per week</div><div class="chart" id="c-week"></div></div>
+      <div><div class="panel-title">Where to add stock</div><div class="small" id="worst" style="margin-bottom:8px"></div>
+        <div class="tablewrap"><table class="data" id="tb-dealers"></table></div></div>
+    </div>
+    <div class="grid2 section">
+      <div><div class="panel-title">Exceptions in 90 days, by owner</div>
+        <div class="tablewrap"><table class="data" id="tb-ex"></table></div><div class="small" id="retries" style="margin-top:6px"></div></div>
+      <div><div class="panel-title">Setting the AI confidence bar</div><div class="chart" id="c-ai"></div>
+        <div class="small" id="ai-note" style="margin-top:6px"></div></div>
+    </div>
+  </section>
+
+  <section role="tabpanel" id="p3" aria-labelledby="t3" hidden>
+    <p class="lead" style="font-size:15px" id="rtm-lead"></p>
+    <div class="tablewrap" style="max-height:none"><table class="data" id="tb-rtm"></table></div>
+    <p class="small">Business requirements, solution design, process flows, test plan and the troubleshooting runbook are in the
+      <a href="https://github.com/AlexaGonzalesTuesta/equipment-parts-integration-hub/tree/main/docs">docs folder</a>.</p>
+  </section>
+
+  <footer id="footer"></footer>
+</div>
+
+<script src="plotly-basic.min.js"></script>
+<script>
+const D = /*__DATA__*/null;
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const pct = (x, d = 0) => (100 * x).toFixed(d) + "%";
+const HAS_PLOTLY = typeof window.Plotly !== "undefined";
+
+// ------------------------------------------------------------------ KPIs
+const K = D.kpi;
+$("k1").textContent = pct(K.touchless); $("k2").textContent = pct(K.filled);
+$("k3l").textContent = `Duplicate orders from ${K.resends} resends`; $("k3").textContent = K.dup_orders;
+$("k4").textContent = `${K.dms_fixed} of ${K.dms_total}`;
+$("kpi-note").textContent = `Simulated 90-day run: ${K.messages.toLocaleString()} inbound messages, 12 dealers, 1,500 machines, ` +
+  `${K.orders.toLocaleString()} ERP orders worth $${(K.value / 1e6).toFixed(1)}M.`;
+$("footer").innerHTML = `Every result on this page was produced by the hub's own Python code (FastAPI, Pydantic, scikit-learn, SQLite) ` +
+  `when GitHub Actions built this page on ${esc(D.built)}. Nothing is typed in by hand. ` +
+  `<a href="https://github.com/AlexaGonzalesTuesta/equipment-parts-integration-hub">Source and tests on GitHub</a>.`;
+
+// ------------------------------------------------------------------ Try it
+let current = null;
+$("scenarios").innerHTML = D.order.map(k => `<button class="scn" data-key="${k}" aria-pressed="false">${esc(D.scenarios[k].label)}</button>
+  <div class="scn-desc">${esc(D.scenarios[k].desc)}</div>`).join("");
+document.querySelectorAll(".scn").forEach(b => b.addEventListener("click", () => show(b.dataset.key, "first")));
+function show(key, phase) {
+  current = key;
+  document.querySelectorAll(".scn").forEach(b => b.setAttribute("aria-pressed", b.dataset.key === key));
+  const r = D.scenarios[key][phase];
+  let h = `<div class="banner ${r.kind}"><div class="kicker">${esc(r.kicker)}</div>${r.text}</div>`;
+  if (r.caption) h += `<div class="small" style="margin-bottom:8px">${esc(r.caption)}</div>`;
+  if (r.body) h += r.body;
+  if (r.detail) h += r.detail;
+  if (phase === "first" && D.scenarios[key].replayed)
+    h += `<div style="margin:10px 0 12px"><button class="btn" id="replay">Dealer system is back up: replay this order</button></div>`;
+  h += `<details class="stepsbox" ${r.outcome !== "ORDER_CREATED" ? "open" : ""}><summary>Every step the hub took</summary>${r.steps}</details>`;
+  h += `<div class="recorded">Recorded from the hub's own run when this page was built.</div>`;
+  $("result").innerHTML = h;
+  const rb = $("replay"); if (rb) rb.addEventListener("click", () => show(key, "replayed"));
+}
+
+// ------------------------------------------------------------------ Exceptions
+const counts = {};
+D.held.forEach(h => counts[h.owner] = (counts[h.owner] || 0) + 1);
+counts["Service advisors"] = D.advisor.length;
+$("owners").innerHTML = Object.entries(counts).sort((a, b) => b[1] - a[1])
+  .map(([o, n]) => `<div class="owner"><b>${n}</b>${esc(o)}</div>`).join("");
+const teams = ["All teams", ...[...new Set(D.held.map(h => h.owner))].sort()];
+$("team").innerHTML = teams.map(t => `<option>${esc(t)}</option>`).join("");
+const idLink = id => `<a href="#" class="mono trace-link" data-id="${esc(id)}">${esc(id)}</a>`;
+function table(el, cols, rows) {
+  el.innerHTML = "<thead><tr>" + cols.map(c => `<th class="${c.num ? "num" : ""}">${esc(c.label)}</th>`).join("") + "</tr></thead><tbody>" +
+    rows.map(r => "<tr>" + cols.map(c => `<td class="${c.num ? "num" : ""}">${c.fmt ? c.fmt(r[c.key], r) : esc(r[c.key])}</td>`).join("") + "</tr>").join("") + "</tbody>";
+}
+function renderHeld() {
+  const t = $("team").value, rows = t === "All teams" ? D.held : D.held.filter(h => h.owner === t);
+  $("held-empty").hidden = rows.length > 0; $("tb-held").parentElement.hidden = rows.length === 0;
+  table($("tb-held"), [{key: "message_id", label: "Message", fmt: idLink}, {key: "channel", label: "Channel"},
+    {key: "problem", label: "Problem"}, {key: "owner", label: "Owner"}, {key: "next_step", label: "Next step"},
+    {key: "detail", label: "Detail"}], rows);
+}
+$("team").addEventListener("change", renderHeld); renderHeld();
+table($("tb-adv"), [{key: "message_id", label: "Message", fmt: idLink}, {key: "machine_id", label: "Machine", fmt: v => `<span class="mono">${esc(v)}</span>`},
+  {key: "note", label: "Operator note"}, {key: "guess", label: "AI best guess"}, {key: "confidence", label: "Confidence", num: 1, fmt: v => v.toFixed(2)}], D.advisor);
+function trace(id) {
+  id = (id || "").trim(); $("trace-id").value = id;
+  if (!id) { $("trace-out").innerHTML = "Enter an id from the tables above, or click any id, to see every step the hub took."; return; }
+  const t = D.traces[id];
+  $("trace-out").innerHTML = t ? `<div class="small" style="margin-bottom:6px">Final status: <span class="chip ${t.status[1]}">${esc(t.status[0])}</span></div>${t.steps}`
+    : `No trace for <span class="mono">${esc(id)}</span> on this page. This page includes the open exceptions and the demo scenarios; ` +
+      `the API endpoint <span class="mono">GET /v1/messages/{id}</span> traces any message.`;
+}
+$("trace-go").addEventListener("click", () => trace($("trace-id").value));
+$("trace-id").addEventListener("keydown", e => { if (e.key === "Enter") trace(e.target.value); });
+document.addEventListener("click", e => {
+  const a = e.target.closest(".trace-link"); if (!a) return; e.preventDefault(); trace(a.dataset.id);
+  $("trace-out").scrollIntoView({behavior: "smooth", block: "nearest"});
+});
+
+// ------------------------------------------------------------------ 90-day results
+const R = D.results;
+function plot(id, traces, layout) {
+  const el = $(id);
+  if (!HAS_PLOTLY) { el.innerHTML = '<div class="chart-error">Chart unavailable</div>'; $("plotly-notice").hidden = false; return; }
+  const axis = {gridcolor: "#ece9e2", linecolor: "#d4d1c8", automargin: true, zeroline: false};
+  Plotly.react(el, traces, Object.assign({margin: {l: 10, r: 14, t: 30, b: 30}, paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "#fff",
+    font: {family: "IBM Plex Sans, Segoe UI, Arial", size: 12, color: "#1d1d1b"},
+    legend: {orientation: "h", x: 0, y: 1.12}, hoverlabel: {font: {family: "IBM Plex Sans, Segoe UI, Arial"}}}, layout,
+    {xaxis: Object.assign({}, axis, (layout || {}).xaxis), yaxis: Object.assign({}, axis, (layout || {}).yaxis)}),
+    {displayModeBar: false, responsive: true});
+}
+let drawn = false;
+function draw90() {
+  if (drawn) return; drawn = true;
+  plot("c-week", [
+    {x: R.weekly.weeks, y: R.weekly.telematics, name: "Machine fault (telematics)", type: "scatter", mode: "lines+markers", line: {color: "#1d1d1b", width: 2}, marker: {size: 6}},
+    {x: R.weekly.weeks, y: R.weekly.ecommerce, name: "Storefront order", type: "scatter", mode: "lines+markers", line: {color: "#b86e00", width: 2}, marker: {size: 6}}], {});
+  const curve = R.curve;
+  plot("c-ai", [
+    {x: curve.map(c => c.threshold), y: curve.map(c => c.auto_order_coverage), name: "Notes ordered automatically", type: "scatter", mode: "lines+markers", line: {color: "#1d1d1b", width: 2}},
+    {x: curve.map(c => c.threshold), y: curve.map(c => c.auto_order_precision), name: "Automatic orders that were right", type: "scatter", mode: "lines+markers", line: {color: "#b86e00", width: 2}}],
+    {yaxis: {tickformat: ".0%", range: [0, 1.02]},
+     shapes: [{type: "line", x0: D.threshold, x1: D.threshold, yref: "paper", y0: 0, y1: 1, line: {dash: "dash", color: "#7a7870", width: 1}}],
+     annotations: [{x: D.threshold, yref: "paper", y: 1, text: `chosen ${pct(D.threshold)}`, showarrow: false, xanchor: "left", font: {size: 11, color: "#5f5e58"}}]});
+}
+const worst = R.dealers[0];
+$("worst").textContent = `${worst.dealer_name} backorders ${pct(worst.backorder)} of its orders, the highest of ${R.dealers.length} dealers. Its parts mix is the first place to raise stocking levels.`;
+table($("tb-dealers"), [{key: "dealer_name", label: "Dealer"}, {key: "orders", label: "Orders", num: 1},
+  {key: "own", label: "Own stock", num: 1, fmt: v => pct(v)}, {key: "transfer", label: "Transfer", num: 1, fmt: v => pct(v)},
+  {key: "backorder", label: "Backordered", num: 1, fmt: v => pct(v)}], R.dealers);
+table($("tb-ex"), [{key: "problem", label: "Problem"}, {key: "owner", label: "Owner"}, {key: "messages", label: "Messages", num: 1},
+  {key: "recovered", label: "Recovered", num: 1}], R.exceptions);
+$("retries").textContent = `${R.retries.toLocaleString()} dealer system timeouts were retried automatically before any of these were held.`;
+if (R.ai.auto_order_precision) $("ai-note").textContent = `At ${pct(D.threshold)}, ${pct(R.ai.auto_order_precision)} of automatic orders are right and ` +
+  `${pct(R.ai.auto_order_coverage)} of notes need no advisor. A higher bar means fewer wrong parts but more manual work.`;
+
+// ------------------------------------------------------------------ requirements
+const covered = D.rtm.filter(r => r.tests_passed > 0).length;
+$("rtm-lead").innerHTML = `<b>${covered} of ${D.rtm.length}</b> business and technical requirements are verified by automated tests that run on every change. ` +
+  `Processing time is ${K.p95.toFixed(1)} ms at the 95th percentile against a ${D.p95_target} ms target (NFR-01).`;
+table($("tb-rtm"), [{key: "req_id", label: "Id", fmt: v => `<span class="mono">${esc(v)}</span>`}, {key: "priority", label: "Priority"},
+  {key: "requirement", label: "Requirement"}, {key: "test_levels", label: "Test levels"}, {key: "tests_passed", label: "Tests passed", num: 1},
+  {key: "status", label: "Status", fmt: v => `<span class="chip ${v === "VERIFIED" ? "ok" : "bad"}">${esc(v)}</span>`}], D.rtm);
+
+// ------------------------------------------------------------------ tabs
+const TABS = ["t0", "t1", "t2", "t3"];
+function select(n, focus) {
+  TABS.forEach((t, i) => { $(t).setAttribute("aria-selected", i === n); $(t).tabIndex = i === n ? 0 : -1; $("p" + i).hidden = i !== n; });
+  if (focus) $(TABS[n]).focus();
+  if (n === 2) { draw90(); if (HAS_PLOTLY) ["c-week", "c-ai"].forEach(id => Plotly.Plots.resize($(id))); }
+}
+TABS.forEach((t, i) => {
+  $(t).addEventListener("click", () => select(i));
+  $(t).addEventListener("keydown", e => {
+    if (e.key === "ArrowRight") select((i + 1) % TABS.length, true);
+    if (e.key === "ArrowLeft") select((i + TABS.length - 1) % TABS.length, true);
+  });
+});
+</script>
+</body>
+</html>

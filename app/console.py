@@ -6,18 +6,15 @@ Every visitor works in a private copy of the database (a sandbox), so scenarios 
 the reset button only change that visitor's data.
 """
 import gzip
-import html
 import inspect
 import json
 import os
-import re
 import shutil
 import sqlite3
 import sys
 import tempfile
 import time
 import uuid
-from datetime import datetime, timedelta
 from pathlib import Path
 
 import pandas as pd
@@ -29,11 +26,11 @@ sys.path.insert(0, str(ROOT))
 
 from hub import config as C  # noqa: E402
 from hub import metrics as M  # noqa: E402
-from hub.connectors import DMSConnector, ERPConnector  # noqa: E402
 from hub.db import connect  # noqa: E402
 from hub.pipeline import run  # noqa: E402
 from hub.recommender import PartsRecommender  # noqa: E402
-from hub.service import IntegrationHub  # noqa: E402
+from app.demo import (OUTCOME_CHIP, REASONS, SCENARIOS, chip, esc, next_id, reliable_hub,  # noqa: E402
+                      render_steps, result_parts, run_scenario, telematics_payload)
 
 GITHUB_URL = "https://github.com/AlexaGonzalesTuesta/equipment-parts-integration-hub"
 BASE_DB = Path(os.environ.get("HUB_DB_PATH", C.DB_PATH))
@@ -144,55 +141,6 @@ ol.steps .d { color:#5f5e58; font-size:12.5px; }
 </style>
 """)
 
-# ----------------------------------------------------------------------------- reference text
-OUTCOME_CHIP = {"ORDER_CREATED": ("Order created", "ok"), "DUPLICATE": ("Duplicate blocked", "grey"),
-                "NO_ACTION": ("No order needed", "grey"), "MANUAL_REVIEW": ("Service advisor review", "warn"),
-                "DEAD_LETTER": ("Held for a person", "bad"), "REJECTED": ("Rejected", "bad")}
-LINE_CHIP = {"RESERVED": ("Reserved", "ok"), "TRANSFER": ("Regional transfer", "info"),
-             "BACKORDERED": ("Backordered", "warn")}
-REASONS = {
-    "DMS_UNAVAILABLE": ("Dealer inventory system did not respond", "IT support",
-                        "Replay once the dealer system is back"),
-    "MASTER_DATA_MISSING": ("Machine, customer or dealer not set up in ERP", "Master data team",
-                            "Add the record in ERP, then replay"),
-    "VALIDATION_FAILED": ("Message broke the agreed data contract", "Sending system team",
-                          "Fix the sender; the hub never guesses at bad data"),
-    "PRICE_MISMATCH": ("Storefront price differs from the ERP price list", "Pricing team",
-                       "Confirm the price with the customer"),
-    "UNKNOWN_PART": ("Part number not in the ERP catalog", "E-commerce team",
-                     "Offer the replacement part"),
-}
-STEP_LABEL = {"IDEMPOTENCY_CHECK": "Duplicate check", "VALIDATE": "Message checked against the data contract",
-              "SEVERITY_RULE": "Severity rule", "ENRICH": "Machine, customer and dealer looked up in ERP",
-              "DEDUPE_RULE": "Open order check (7 days)", "DMS_AVAILABILITY": "Dealer stock check",
-              "DMS_RESERVE": "Stock reservation", "SOURCE": "Part sourced", "ERP_ORDER": "ERP sales order",
-              "PRICE_CHECK": "Price checked against ERP price list", "DEAD_LETTER": "Held for a person"}
-STATUS_TEXT = {"OK": "OK", "RULE": "Catalog", "AI": "AI", "CREATED": "Created", "SKIP": "Skipped",
-               "DUPLICATE": "Duplicate", "RETRY": "Retry", "FAILED": "Failed", "TRANSFER": "Transfer",
-               "RESERVED": "Reserved", "BACKORDERED": "Backordered", "DMS_UNAVAILABLE": "Dealer system down",
-               "MASTER_DATA_MISSING": "Not in ERP", "VALIDATION_FAILED": "Bad data", "PRICE_MISMATCH": "Price mismatch",
-               "UNKNOWN_PART": "Unknown part"}
-STATUS_CHIP = {"OK": "ok", "RULE": "ok", "AI": "info", "RESERVED": "ok", "TRANSFER": "info", "BACKORDERED": "warn",
-               "CREATED": "ok", "SKIP": "grey", "DUPLICATE": "grey", "RETRY": "warn", "FAILED": "bad"}
-
-SCENARIOS = [
-    ("assigned", "Fault code, parts in stock",
-     "An excavator reports a known fault. Normally: a phone call, a technician visit, then someone re-keys the order."),
-    ("transfer", "Assigned dealer is out of stock",
-     "The hub checks the other dealers in the region instead of leaving the machine waiting."),
-    ("ai_ok", "No fault code, operator note only",
-     "Older machines send no code. The AI reads the note and orders the kit when it is confident."),
-    ("ai_unsure", "Vague note, AI not confident",
-     "Below 65% confidence nothing is ordered. A service advisor decides, so wrong parts never ship."),
-    ("duplicate", "Same event sent twice",
-     "Telematics platforms resend on network errors. The customer must never get two orders."),
-    ("outage", "Dealer system is down",
-     "The dealer's inventory system stops answering. The order is held whole, then replayed."),
-    ("price", "Storefront price is out of date",
-     "A web order arrives with a stale price. It is held for the pricing team instead of billing the wrong amount."),
-]
-
-
 # ----------------------------------------------------------------------------- data and sandbox
 SNAPSHOT_DIR = ROOT / "app" / "snapshot"
 
@@ -287,227 +235,7 @@ def baseline(db_path: str):
     return s, orders, dl, retries
 
 
-# ----------------------------------------------------------------------------- scenario helpers
-def now():
-    return datetime.now().replace(microsecond=0)
-
-
-def next_id(prefix):
-    st.session_state.sent += 1
-    return f"{prefix}-{st.session_state.sandbox_id}-{st.session_state.sent:03d}"
-
-
-def reliable_hub(conn, model, outages=()):
-    return IntegrationHub(conn, model, dms=DMSConnector(conn, failure_rate=0.0, outages=list(outages)))
-
-
-def kit(conn, fault):
-    return [(r["part_number"], r["quantity"]) for r in
-            conn.execute("SELECT part_number, quantity FROM erp_fault_parts WHERE fault_code = ? ORDER BY part_number",
-                         (fault,))]
-
-
-def avail(conn, dealer, pn):
-    row = conn.execute("SELECT on_hand - reserved FROM dms_inventory WHERE dealer_id = ? AND part_number = ?",
-                       (dealer, pn)).fetchone()
-    return row[0] if row else 0
-
-
-def machines(conn, machine_type=None):
-    sql = ("SELECT m.machine_id, m.model, m.machine_type, m.dealer_id, d.region FROM erp_machines m "
-           "JOIN erp_dealers d USING (dealer_id)")
-    rows = conn.execute(sql + (" WHERE m.machine_type = ?" if machine_type else "") + " ORDER BY m.machine_id",
-                        (machine_type,) if machine_type else ()).fetchall()
-    used = set(st.session_state.used_machines)
-    return [r for r in rows if r["machine_id"] not in used]
-
-
-def has_open_order(conn, machine_id, fault):
-    since = (now() - timedelta(days=7)).isoformat()
-    return ERPConnector(conn).open_order_for_fault(machine_id, fault, since) is not None
-
-
-def region_alt(conn, m, pn, qty):
-    for d in ERPConnector(conn).dealers_in_region(m["region"], m["dealer_id"]):
-        if avail(conn, d, pn) >= qty:
-            return d
-    return None
-
-
-def find_in_stock(conn, faults, machine_type=None):
-    for m in machines(conn, machine_type):
-        for f in faults:
-            if not has_open_order(conn, m["machine_id"], f) and all(
-                    avail(conn, m["dealer_id"], pn) >= q for pn, q in kit(conn, f)):
-                return m, f
-    return None, None
-
-
-def find_transfer(conn, faults):
-    """A machine whose own dealer lacks a part that another dealer in the region has."""
-    fallback = None
-    for m in machines(conn):
-        for f in faults:
-            if has_open_order(conn, m["machine_id"], f):
-                continue
-            parts = kit(conn, f)
-            short = [(pn, q) for pn, q in parts if avail(conn, m["dealer_id"], pn) < q]
-            covered = all(avail(conn, m["dealer_id"], pn) >= q or region_alt(conn, m, pn, q) for pn, q in parts)
-            if short and covered:
-                return m, f, None
-            if fallback is None and all(region_alt(conn, m, pn, q) for pn, q in parts):
-                fallback = (m, f)
-    if fallback:  # no natural stock-out found: create one in this visitor's sandbox only
-        m, f = fallback
-        pn, q = kit(conn, f)[0]
-        conn.execute("UPDATE dms_inventory SET on_hand = reserved WHERE dealer_id = ? AND part_number = ?",
-                     (m["dealer_id"], pn))
-        conn.commit()
-        return m, f, pn
-    return None, None, None
-
-
-def telematics_payload(event_id, machine_id, fault, note, severity=3):
-    return {"event_id": event_id, "machine_id": machine_id, "occurred_at": now().isoformat(), "fault_code": fault,
-            "severity": severity, "symptom_note": note, "engine_hours": 6120.0}
-
-
-def run_scenario(key, conn, model):
-    note_for = {f: n for f, n in [("COO-401", "engine overheating, coolant temp in red"),
-                                  ("HYD-130", "hose burst on stick, spraying hydraulic oil"),
-                                  ("ENG-230", "air filter restriction indicator red"),
-                                  ("UND-620", "roller leaking oil")]}
-    extra = {}
-    if key in ("assigned", "duplicate", "outage"):
-        m, f = find_in_stock(conn, ["HYD-130", "COO-401", "ENG-230", "UND-620"],
-                             "Excavator" if key == "assigned" else None)
-        if m is None:
-            raise RuntimeError("No machine with parts in stock is left in this sandbox. Reset the sandbox.")
-        payload = telematics_payload(next_id("EV"), m["machine_id"], f, note_for.get(f, ""))
-        if key == "assigned":
-            reliable_hub(conn, model).process_telematics(payload)
-        elif key == "duplicate":
-            first = reliable_hub(conn, model).process_telematics(payload)
-            reliable_hub(conn, model).process_telematics(dict(payload))
-            extra["first_order"] = first.order_id
-        else:
-            offset = (now() - datetime.fromisoformat(C.SIM_START)).days
-            reliable_hub(conn, model, [(m["dealer_id"], offset - 1, offset + 2)]).process_telematics(payload)
-            extra["outage_dealer"] = m["dealer_id"]
-        mid, channel = payload["event_id"], "TELEMATICS"
-    elif key == "transfer":
-        m, f, forced = find_transfer(conn, ["COO-401", "HYD-130", "UND-620", "ENG-230", "ELE-501", "FUE-310"])
-        if m is None:
-            raise RuntimeError("No regional stock is left in this sandbox. Reset the sandbox.")
-        payload = telematics_payload(next_id("EV"), m["machine_id"], f, note_for.get(f, ""))
-        reliable_hub(conn, model).process_telematics(payload)
-        mid, channel = payload["event_id"], "TELEMATICS"
-        extra["forced_part"] = forced
-    elif key in ("ai_ok", "ai_unsure"):
-        notes = (["hose burst on stick, spraying hydraulic oil", "engine overheating, coolant temp in red",
-                  "hydraulic hose split near fitting, oil everywhere"] if key == "ai_ok" else
-                 ["machine making a strange noise, please advise", "noise from somewhere at the back",
-                  "weird smell in cab"])
-        note = next((n for n in notes if (model.predict(n).confidence >= C.AI_CONFIDENCE_THRESHOLD) == (key == "ai_ok")),
-                    notes[0])
-        fault = model.predict(note).fault_code
-        m = next((m for m in machines(conn) if not has_open_order(conn, m["machine_id"], fault)), None)
-        if m is None:
-            raise RuntimeError("No machines left in this sandbox. Reset the sandbox.")
-        payload = telematics_payload(next_id("EV"), m["machine_id"], None, note)
-        reliable_hub(conn, model).process_telematics(payload)
-        mid, channel = payload["event_id"], "TELEMATICS"
-    elif key == "price":
-        cust = conn.execute("SELECT c.customer_id, d.dealer_id FROM erp_customers c JOIN erp_dealers d "
-                            "ON d.region = c.region ORDER BY c.customer_id LIMIT 1 OFFSET ?",
-                            (st.session_state.sent % 50,)).fetchone()
-        part = conn.execute("SELECT part_number, list_price FROM erp_parts WHERE description LIKE 'Primary air filter'"
-                            ).fetchone() or conn.execute("SELECT part_number, list_price FROM erp_parts LIMIT 1").fetchone()
-        payload = {"web_order_id": next_id("WEB"), "customer_id": cust["customer_id"], "dealer_id": cust["dealer_id"],
-                   "submitted_at": now().isoformat(),
-                   "lines": [{"part_number": part["part_number"], "quantity": 2,
-                              "unit_price": round(part["list_price"] * 0.88, 2)}]}
-        reliable_hub(conn, model).process_web_order(payload)
-        mid, channel = payload["web_order_id"], "ECOMMERCE"
-        m = None
-    else:
-        raise ValueError(key)
-    if m is not None:
-        st.session_state.used_machines.append(m["machine_id"])
-    st.session_state.last = {"scenario": key, "message_id": mid, "channel": channel, **extra}
-
-
 # ----------------------------------------------------------------------------- rendering
-def esc(x):
-    return html.escape("" if x is None else str(x))
-
-
-def chip(text, kind):
-    return f'<span class="chip {kind}">{esc(text)}</span>'
-
-
-def money(x):
-    return f"${x:,.2f}"
-
-
-def dealer_names(conn):
-    return {r["dealer_id"]: r["name"] for r in conn.execute("SELECT dealer_id, name FROM erp_dealers")}
-
-
-def render_steps(conn, mid):
-    rows = conn.execute("SELECT step, status, detail FROM hub_audit WHERE message_id = ? ORDER BY id",
-                        (mid,)).fetchall()
-    if not rows:
-        return '<div class="small">No processing steps recorded.</div>'
-    names = dealer_names(conn)
-    items = []
-    for r in rows:
-        label = STEP_LABEL.get(r["step"], r["step"].replace("_", " ").title())
-        if r["step"] == "DIAGNOSE":
-            label = "AI read the operator note" if r["status"] == "AI" else "Fault code matched to the catalog"
-        detail = r["detail"] or ""
-        for did, name in names.items():
-            detail = re.sub(rf"\b{did}\b", name, detail)
-        kind = "bad" if r["step"] == "DEAD_LETTER" else STATUS_CHIP.get(r["status"], "grey")
-        items.append(f'<li>{esc(label)} {chip(STATUS_TEXT.get(r["status"], r["status"].replace("_", " ").title()), kind)}'
-                     f'{"<br><span class=d>" + esc(detail) + "</span>" if detail else ""}</li>')
-    return '<ol class="steps">' + "".join(items) + "</ol>"
-
-
-def render_order(conn, order_id):
-    o = conn.execute("""SELECT o.*, m.model, m.machine_type, c.name AS customer, d.name AS dealer, d.region,
-                               f.description AS fault_desc
-                        FROM erp_orders o JOIN erp_dealers d USING (dealer_id)
-                        JOIN erp_customers c USING (customer_id)
-                        LEFT JOIN erp_machines m USING (machine_id)
-                        LEFT JOIN erp_fault_catalog f USING (fault_code)
-                        WHERE o.order_id = ?""", (order_id,)).fetchone()
-    lines = conn.execute("""SELECT l.*, p.description FROM erp_order_lines l JOIN erp_parts p USING (part_number)
-                            WHERE order_id = ? ORDER BY line_no""", (order_id,)).fetchall()
-    names = dealer_names(conn)
-    if o["machine_id"]:
-        diag = conn.execute("SELECT detail FROM hub_audit WHERE message_id = ? AND step = 'DIAGNOSE' ORDER BY id DESC",
-                            (o["source_message_id"],)).fetchone()
-        conf = re.search(r"\(([\d.]+)\)", diag["detail"]) if diag and o["ai_assisted"] else None
-        how = f"AI, {float(conf.group(1)):.0%} confident" if conf else "fault code from the machine"
-        fault = f'<span class="mono">{esc(o["fault_code"])}</span> {esc(o["fault_desc"])}<br><span class="small">{esc(how)}</span>'
-        machine = f'<span class="mono">{esc(o["machine_id"])}</span> {esc(o["model"])} {esc(o["machine_type"])}'
-    else:
-        fault, machine = "Storefront order", "n/a"
-    grid = "".join(f'<div><div class="k">{k}</div><div class="v">{v}</div></div>' for k, v in [
-        ("Sales order", f'<span class="mono">{esc(o["order_id"])}</span>'), ("Machine", machine), ("Fault", fault),
-        ("Customer", esc(o["customer"])), ("Dealer", f'{esc(o["dealer"])}<br><span class="small">{esc(o["region"])}</span>'),
-        ("Order value", money(o["total_value"]))])
-    body = "".join(
-        f'<tr><td class="mono">{esc(l["part_number"])}</td><td>{esc(l["description"])}</td>'
-        f'<td class="num">{l["quantity"]}</td><td class="num">{money(l["unit_price"])}</td>'
-        f'<td>{esc(names.get(l["fulfilling_dealer_id"], "No dealer in region has stock"))}</td>'
-        f'<td>{chip(*LINE_CHIP.get(l["line_status"], (l["line_status"], "grey")))}</td></tr>' for l in lines)
-    return (f'<div class="doc"><div class="doc-grid">{grid}</div><table class="lines"><thead><tr><th>Part no.</th>'
-            f'<th>Description</th><th style="text-align:right">Qty</th><th style="text-align:right">Unit price</th>'
-            f'<th>Ships from</th><th>Status</th></tr></thead><tbody>{body}</tbody></table></div>')
-
-
 def banner(kind, kicker, text):
     raw(f'<div class="banner {kind}"><div class="kicker">{esc(kicker)}</div>{text}</div>')
 
@@ -516,65 +244,25 @@ def render_result(conn, model):
     last = st.session_state.get("last")
     if not last:
         raw('<div class="empty">No event sent yet.<br>Pick a scenario on the left. The ERP order, the dealer '
-                    'that ships each part, and every step the hub took will appear here.</div>')
+            'that ships each part, and every step the hub took will appear here.</div>')
         return
-    mid = last["message_id"]
-    res = conn.execute("SELECT * FROM hub_results WHERE message_id = ? ORDER BY rowid DESC LIMIT 1", (mid,)).fetchone()
-    if res is None:
+    parts = result_parts(conn, last)
+    if parts is None:
         st.error("This message was not recorded. Reset the sandbox and try again.")
         return
-    outcome, detail = res["outcome"], res["detail"] or ""
-    secs = f'Processed in {res["latency_ms"] / 1000:.3f} seconds.'
-
-    if outcome == "ORDER_CREATED":
-        o = conn.execute("SELECT fulfillment, status FROM erp_orders WHERE order_id = ?", (res["order_id"],)).fetchone()
-        text = {"ASSIGNED_DEALER": "Every part is reserved at the machine's own dealer. No phone call, no re-keying.",
-                "REGIONAL_TRANSFER": "The assigned dealer was short, so the hub reserved those parts at another "
-                                     "dealer in the same region.",
-                "BACKORDER": "Some parts are on backorder. The dealer sees it now instead of after a phone call."
-                }[o["fulfillment"]]
-        if last.get("scenario") == "outage":
-            text = "Replayed after the dealer system came back. " + text
-        banner("ok", f"Order {res['order_id']} created", f"{text} {secs}")
-        if last.get("forced_part"):
-            st.caption(f"In your sandbox, the assigned dealer's stock of {last['forced_part']} was set to zero to "
-                       "create this situation.")
-        raw(render_order(conn, res["order_id"]))
-    elif outcome == "DUPLICATE":
-        banner("info", "Resend blocked",
-               f"Order {esc(last.get('first_order'))} already covers this event, so the customer is not billed twice. "
-               f"The database also refuses a second order for the same message. {secs}")
-        if last.get("first_order"):
-            raw(render_order(conn, last["first_order"]))
-    elif outcome == "MANUAL_REVIEW":
-        r = conn.execute("SELECT * FROM hub_manual_review WHERE message_id = ?", (mid,)).fetchone()
-        top3 = json.loads(r["top3"]) if r else []
-        descs = {x["fault_code"]: x["description"] for x in conn.execute("SELECT fault_code, description FROM erp_fault_catalog")}
-        guesses = "".join(f'<tr><td class="mono">{esc(c)}</td><td>{esc(descs.get(c, ""))}</td>'
-                          f'<td class="num">{p:.0%}</td></tr>' for c, p in top3)
-        banner("warn", "Sent to a service advisor",
-               f"The AI was only {r['confidence']:.0%} sure, below the {C.AI_CONFIDENCE_THRESHOLD:.0%} bar, so no "
-               f"parts were ordered. A wrong guess would ship the wrong parts to a job site. {secs}")
-        raw(f'<div class="doc"><div class="small">Operator note</div><div style="margin:2px 0 10px 0">'
-                    f'"{esc(r["symptom_note"])}"</div><table class="lines"><thead><tr><th>AI guess</th><th>Fault</th>'
-                    f'<th style="text-align:right">Confidence</th></tr></thead><tbody>{guesses}</tbody></table></div>')
-    elif outcome in ("DEAD_LETTER", "REJECTED"):
-        code = detail.split(":")[0]
-        what, owner, step = REASONS.get(code, (detail, "IT support", "Investigate"))
-        banner("bad", f"Held for {owner}", f"{esc(what)}. Nothing was half-ordered. Next step: {esc(step)}. {secs}")
-        raw(f'<div class="small">System detail: <span class="mono">{esc(detail)}</span></div>')
-        open_dl = conn.execute("SELECT 1 FROM hub_dead_letter WHERE message_id = ? AND replayable = 1 "
-                               "AND resolved_at IS NULL", (mid,)).fetchone()
-        if code == "DMS_UNAVAILABLE" and open_dl:
-            if st.button("Dealer system is back up: replay this order", key="replay_last"):
-                reliable_hub(conn, model).replay_one(mid)
-                st.rerun()
-    else:
-        banner("info", OUTCOME_CHIP.get(outcome, (outcome, ""))[0], f"{esc(detail)} {secs}")
-
-    with st.expander("Every step the hub took", expanded=outcome != "ORDER_CREATED"):
-        raw(f'<div class="small" style="margin-bottom:6px">Message <span class="mono">{esc(mid)}</span>, '
-                    f'{esc(last["channel"].title())}</div>' + render_steps(conn, mid))
+    banner(parts["kind"], parts["kicker"], parts["text"])
+    if parts["caption"]:
+        st.caption(parts["caption"])
+    if parts["body"]:
+        raw(parts["body"])
+    if parts["detail"]:
+        raw(parts["detail"])
+    if parts["replayable"]:
+        if st.button("Dealer system is back up: replay this order", key="replay_last"):
+            reliable_hub(conn, model).replay_one(last["message_id"])
+            st.rerun()
+    with st.expander("Every step the hub took", expanded=parts["outcome"] != "ORDER_CREATED"):
+        raw(parts["steps"])
 
 
 def style_fig(fig, height=300):
@@ -640,7 +328,7 @@ with tabs[0]:
             if st.button(label, key=f"scn_{key}", **STRETCH):
                 try:
                     with st.spinner("Sending the event to the hub..."):
-                        run_scenario(key, conn, model)
+                        st.session_state.last = run_scenario(key, conn, model, st.session_state)
                 except Exception as exc:  # noqa: BLE001
                     st.session_state.last = None
                     st.error(f"That scenario could not run: {exc}")
@@ -663,7 +351,7 @@ with tabs[0]:
                 sent = st.form_submit_button("Send event to the hub")
             if sent:
                 try:
-                    payload = telematics_payload(next_id("EV"), m_id, code or None, note, sev)
+                    payload = telematics_payload(next_id(st.session_state, "EV"), m_id, code or None, note, sev)
                     reliable_hub(conn, model).process_telematics(payload)
                     st.session_state.last = {"scenario": "own", "message_id": payload["event_id"],
                                              "channel": "TELEMATICS"}

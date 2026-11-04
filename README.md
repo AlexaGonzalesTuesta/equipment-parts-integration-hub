@@ -4,11 +4,13 @@
 
 **Created by Alexa Gonzales Tuesta** | [LinkedIn](https://www.linkedin.com/in/alexa-gonzales-tuesta/)
 
-### [Try the live console](https://equipment-parts-integration-app-hrkhgumc6pa6hzh4jxulvq.streamlit.app/)
+### [Try the live console](https://alexagonzalestuesta.github.io/equipment-parts-integration-hub/)
 
-Pick one of seven scenarios and watch a machine fault become a reserved ERP parts order, or see how the hub handles a stock-out, a vague operator note, a resend, a dealer system outage and a stale storefront price. Each visitor gets a private sandbox; fictional data only.
+Loads in about a second, no sign-up. Pick one of seven scenarios and watch a machine fault become a reserved ERP parts order, or see how the hub handles a stock-out, a vague operator note, a resend, a dealer system outage and a stale storefront price. Fictional data only.
 
-![Operations console](docs/images/console-v2.png)
+![Operations console](docs/images/console-v3.png)
+
+Every result in the live console is the hub's real output: on each push, GitHub Actions runs the 90-day simulation, the tests and `site/build_site.py`, which sends each scenario through the hub (`app/demo.py`) and publishes what it produced. To send your own events, run the interactive console or the REST API locally (see [Run it](#run-it)).
 
 An integration hub that connects four enterprise systems found at any heavy equipment manufacturer and its dealer
 network (telematics, ERP order management, dealer inventory, and an e-commerce storefront), so a machine fault or a
@@ -87,7 +89,8 @@ pip install -r requirements.txt
 python run_pipeline.py                      # build the systems and process all 3,800 messages
 pytest                                      # 43 tests: unit, integration, non-functional, system
 python tools/build_rtm.py                   # regenerate the traceability matrix
-streamlit run app/console.py                # operations console
+streamlit run app/console.py                # interactive console with a private sandbox
+python site/build_site.py                   # build the static console into _site/ (published on GitHub Pages)
 uvicorn hub.api:create_app --factory        # REST API, docs at http://127.0.0.1:8000/docs
 ```
 
@@ -100,11 +103,12 @@ curl -X POST http://127.0.0.1:8000/v1/telematics/events -H "Content-Type: applic
 
 ```
 hub/            config, canonical models, connectors, AI recommender, orchestration, API, metrics, simulator
-app/            Streamlit operations console
+app/            interactive console (Streamlit) and the shared demo scenarios (demo.py)
+site/           static console builder published on GitHub Pages
 tests/          unit, integration, non-functional and system tests, tagged by requirement id
 tools/          traceability matrix builder
 docs/           requirements, design, process flows, test plan, traceability matrix, runbook
-.github/        CI: pipeline, tests and traceability gate on every push
+.github/        CI: pipeline, tests and traceability gate on every push; Pages publish
 ```
 
 ## Tech stack

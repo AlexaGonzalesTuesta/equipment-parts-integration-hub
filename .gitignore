@@ -4,3 +4,6 @@ reports/
 __pycache__/
 *.pyc
 .venv/
+
+# Static console build output (published by .github/workflows/pages.yml)
+_site/
